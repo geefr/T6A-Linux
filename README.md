@@ -27,10 +27,14 @@ Tricks to get it working
 -Ensure you have permissions to access /dev/ttyUSB0. The simplest way is to 'sudo chown yourname:yourname /dev/ttyUSB0' but updating udev would be better
 -Ensure uinput is installed
 -Ensure you have permissions to access /dev/uinput
--run t6aJoy
+-run t6aJoy. This doesn't need to be run as root as long as you've got the required permissions.
 -If anything stops working kill t6aJoy and start again
 
 # Links and resources
 Excellent python management utility and description of serial protocol
 https://github.com/yschaeff/HK-T6Av2
 
+Similar concept to t6aJoy. Untested but should work.
+https://www.reddit.com/r/Multicopter/comments/39orf6/quadcopter_fpv_simulator/
+'I used this script:https://gist.github.com/solidgoldbomb/6181498
+I had to install python-uinput and run this script as root. Then I ran xboxdrv since Freerider didn't see the joystick device. Here's my command for xboxdrv: xboxdrv --evdev /dev/input/event17 --evdev-absmap ABS_X=x2,ABS_Y=y1,ABS_Z=y2,ABS_RX=x1 -s'
