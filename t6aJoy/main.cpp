@@ -15,6 +15,8 @@
 #include <fcntl.h>
 
 #include <unistd.h>
+#include <chrono>
+#include <thread>
 
 #include "t6acom.hpp"
 using namespace t6a;
@@ -117,24 +119,26 @@ int main(void)
     std::cerr << "Failed to create device handle" << std::endl;
     return 1;
   }
-     
+ 
+ // port.dump();
+ // return 0;
+    
   try
   {
     while( true )
     {
       MSG_PotState potState;
-      if( !port.getPotState( potState ) )
+      // Block for the state
+//std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      port.getPotState( potState );
+
+      if( !potState.valid() )
       {
-        // That's fine, we're in non-blocking mode
-        continue;
-//        throw std::runtime_error("Failed to get potState. Is the transmitter on?");
+        std::cout << "Pot state invalid" << std::endl;
+//        continue;
       }
 /*
       std::cout << "Pot State:" << std::endl;
-      std::cout << "  header1:" << std::hex << (unsigned int)potState.header1 << std::endl;
-      std::cout << "  header2:" << std::hex << (unsigned int)potState.header2 << std::endl;
-      //std::cout << "  channel1MSB: " << std::dec << (unsigned int)potState.channel1MSB << std::endl;
-      //std::cout << "  channel1LSB: " << std::dec << (unsigned int)potState.channel1LSB << std::endl;
       std::cout << "  channel1: " << std::dec << (unsigned int)potState.channel1() << std::endl;
       std::cout << "  channel2: " << std::dec << potState.channel2() << std::endl;
       std::cout << "  channel3: " << std::dec << potState.channel3() << std::endl;
@@ -142,9 +146,6 @@ int main(void)
       std::cout << "  channel5: " << std::dec << potState.channel5() << std::endl;
       std::cout << "  channel6: " << std::dec << potState.channel6() << std::endl;
 */
-      //TODO: Sync with port baud speed etc
-      //std::this_thread::sleep_for( std::chrono::milliseconds(200) );
-
       struct input_event ev;
       memset(&ev, 0x00, sizeof(ev) );
       ev.type = EV_ABS;
@@ -166,11 +167,13 @@ int main(void)
       ev.code = ABS_RY;
       ev.value = potState.channel6();
       ret = write( fd, &ev, sizeof(ev) );
-      if( ret != sizeof(ev) )
-      {
-        throw std::runtime_error("Failed to write event to uinput");
-      }
 
+      ev.type = EV_SYN;
+      ev.code = 0;
+      ev.value = 0;
+      ret = write(fd, &ev, sizeof(ev));
+
+      std::cerr << "Sync" << std::endl;
     }
   }
   catch( std::runtime_error& e )

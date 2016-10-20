@@ -18,8 +18,8 @@ namespace t6a
 
       void openPort();
       
-      bool getPotState( MSG_PotState& state, unsigned int maxRequests = 100 );
-    
+      void getPotState( MSG_PotState& state );
+      void dump();    
     private:
       std::string m_path;
       int m_handle;

@@ -5,10 +5,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <termios.h>
 
 #include <exception>
 #include <stdexcept>
 
+#include <fstream>
+#include <thread>
+#include <chrono>
 namespace t6a
 {
 
@@ -26,45 +30,42 @@ namespace t6a
     }
   
     fcntl( m_handle, F_SETFL, 0 );
-    
-    /* Baud rate/port settings TODO
-     * 
-tcgetattr(fd, &oldtio); /* save current port settings */ 
 
+    struct termios term;
+    memset( &term, 0x00, sizeof(termios) );
+    if( tcgetattr( m_handle, &term ) != 0 )
+    {
+      close(m_handle);
+      throw std::runtime_error( "tcgetattr failed." );
+    }
 
-/* set new port settings for canonical input processing * 
-midtio.c_cflag = BAUDRATE9600 | CS8 | CLOCAL | CSTOPB ;
-midtio.c_iflag = IGNPAR | ICRNL;
-midtio.c_oflag = 0;
-midtio.c_lflag = ICANON;
+    // Set baudrate to 115200
+    if( cfsetispeed( &term, B115200 ) != 0 )
+    {
+      close(m_handle);
+      throw std::runtime_error( "Failed to set input baudrate" );
+    }
+    if( cfsetospeed( &term, B115200 ) != 0 )
+    {
+      close(m_handle);
+      throw std::runtime_error( "Failed to set input baudrate" );
+    }
 
-newtio.c_cflag = BAUDRATE19200 | CRTSCTS | CS8 | CLOCAL | CREAD;
-newtio.c_iflag = IGNPAR | ICRNL;
-newtio.c_oflag = 0;
-newtio.c_lflag = ICANON;
+    // Set format and disable flow control
+    term.c_cflag &= ~CSIZE;
+    term.c_cflag |= CS8;
 
+    term.c_iflag &= ~(IXON | IXOFF | IXANY);
 
-tcsetattr(fd, TCSANOW, &midtio);
-char break[] = {0x00}; // break field (0000 0000)
+    term.c_cc[VMIN] = 0;
+    term.c_cc[VTIME] = 0;
 
-c = write (fd, break, sizeof(break));
+    if( tcsetattr( m_handle, TCSANOW, &term ) != 0 )
+    {
+      close( m_handle );
+      throw std::runtime_error( "tcsetattr failed" );
+    }
 
-tcsetattr(fd, TCSANOW, &newtio);  
-
-
-char sync [] = {0x55}; 
-char PID [] = {0xE2}; 
-char data [] = {0xAA}; 
-char data1 [] = {0xA5};  
-char check [] = {0xAF}; 
-c = write (fd, sync, sizeof(sync));
-c = write (fd, PID, sizeof(PID));
-c = write (fd, data, sizeof(data));
-c = write (fd, data1, sizeof(data1));
-c = write (fd, check, sizeof(check));
-
-/* restore old port settings *
- tcsetattr(fd,TCSANOW,&oldtio);*/
   }
   
   T6ACom::~T6ACom()
@@ -72,21 +73,45 @@ c = write (fd, check, sizeof(check));
     close( m_handle );
   }
   
-  bool T6ACom::getPotState( MSG_PotState& state, unsigned int maxRequests )
+  void T6ACom::getPotState( MSG_PotState& state )
   {
     ssize_t bytesRead(0);
     unsigned int requests(0);
-    while( bytesRead == 0 && requests < maxRequests )
+    state.reset();
+    // Flush to discard old events
+    // tcflush( m_handle, TCIOFLUSH );
+      
+    uint8_t header1(0x00);
+    uint8_t header2(0x00);
+    while( header1 != MSG_PotState::header1() )
     {
-      ++requests;
-      state.reset();
-      bytesRead = read( m_handle, &state, sizeof(MSG_PotState) );
-      if( !state.valid() )
+      read( m_handle, &header1, sizeof(uint8_t) );
+    }
+    while( header2 != MSG_PotState::header2() )
+    {
+      read( m_handle, &header2, sizeof(uint8_t) );
+    }
+    state.readState( m_handle );
+  }
+
+  void T6ACom::dump()
+  {
+    std::ofstream strm("./dump", std::ios::binary );
+    ssize_t bytesToRead(1024);
+    ssize_t bytesRead(0);
+    char buffer[1024];
+std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    while( bytesRead < bytesToRead )
+    {
+      ssize_t numRead( read( m_handle, buffer + bytesRead, bytesToRead - bytesRead ) );
+      if( numRead > 0 )
       {
-        bytesRead = 0;
+        bytesRead += numRead;
       }
     }
-    return bytesRead != 0;
+
+    strm.write( buffer, 1024 );
+    strm.close();
   }
 
 };
